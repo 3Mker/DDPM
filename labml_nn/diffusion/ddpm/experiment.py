@@ -29,7 +29,7 @@ from labml.configs import BaseConfigs, option
 from labml_helpers.device import DeviceConfigs
 from labml_nn.diffusion.ddpm import DenoiseDiffusion
 from labml_nn.diffusion.ddpm.unet import UNet
-
+from OCTA import OCTADataset
 
 class Configs(BaseConfigs):
     """
@@ -94,12 +94,17 @@ class Configs(BaseConfigs):
         )
 
         # Create dataloader
-        self.data_loader = torch.utils.data.DataLoader(self.dataset, self.batch_size, shuffle=True, pin_memory=True)
-        # Create optimizer
+        dataset = self.dataset
+        if dataset == 'OCTA':
+            dataset = OCTADataset()  # 确保 OCTADataset 类已定义
+        self.data_loader = torch.utils.data.DataLoader(dataset, self.batch_size, shuffle=True, pin_memory=True)
         self.optimizer = torch.optim.Adam(self.eps_model.parameters(), lr=self.learning_rate)
 
         # Image logging
         tracker.set_image("sample", True)
+
+
+    
 
     def sample(self):
         """
@@ -120,13 +125,35 @@ class Configs(BaseConfigs):
             # Log samples
             tracker.save('sample', x)
 
-    def train(self):
-        """
-        ### Train
-        """
+    # def train(self):
+    #     """
+    #     ### Train
+    #     """
 
+    #     # Iterate through the dataset
+    #     for data in monit.iterate('Train', self.data_loader):
+    #         # Increment global step
+    #         tracker.add_global_step()
+    #         # Move data to device
+    #         data = data.to(self.device)
+
+    #         # Make the gradients zero
+    #         self.optimizer.zero_grad()
+    #         # Calculate loss
+    #         loss = self.diffusion.loss(data)
+    #         # Compute gradients
+    #         loss.backward()
+    #         # Take an optimization step
+    #         self.optimizer.step()
+    #         # Track the loss
+    #         tracker.save('loss', loss)
+
+    def train(self):
+    # 获取数据加载器的总批次数量
+        total_batches = len(self.data_loader)
+        print(f"Total batches: {total_batches}")
         # Iterate through the dataset
-        for data in monit.iterate('Train', self.data_loader):
+        for batch_idx, data in enumerate(monit.iterate('Train', self.data_loader)):
             # Increment global step
             tracker.add_global_step()
             # Move data to device
@@ -142,6 +169,12 @@ class Configs(BaseConfigs):
             self.optimizer.step()
             # Track the loss
             tracker.save('loss', loss)
+
+            # 打印进度
+            progress = (batch_idx + 1) / total_batches * 100
+            print(f"Progress: {progress:.2f}% | Batch: {batch_idx + 1}/{total_batches} | Loss: {loss.item():.4f}")
+
+
 
     def run(self):
         """
@@ -226,23 +259,31 @@ def mnist_dataset(c: Configs):
 
 def main():
     # Create experiment
-    experiment.create(name='diffuse', writers={'screen', 'labml'})
+    # experiment.create(name='diffuse', writers={'screen', 'labml'})
+    experiment.create(name="DDPM_OCTA", writers={'screen'})
 
     # Create configurations
     configs = Configs()
 
     # Set configurations. You can override the defaults by passing the values in the dictionary.
+    # experiment.configs(configs, {
+    #     'dataset': 'CelebA',  # 'MNIST'
+    #     'image_channels': 3,  # 1,
+    #     'epochs': 100,  # 5,
+    # })
     experiment.configs(configs, {
-        'dataset': 'CelebA',  # 'MNIST'
-        'image_channels': 3,  # 1,
-        'epochs': 100,  # 5,
+        'dataset': 'OCTA',
+        'image_channels': 1,
+        'batch_size': 8,
+        'epochs': 5,
+        'image_size': 224,                     
     })
 
     # Initialize
     configs.init()
 
     # Set models for saving and loading
-    experiment.add_pytorch_models({'eps_model': configs.eps_model})
+    experiment.add_pytorch_models({'OCTA_model': configs.eps_model})
 
     # Start and run the training loop
     with experiment.start():
@@ -252,3 +293,12 @@ def main():
 #
 if __name__ == '__main__':
     main()
+
+# 移除原来的远程仓库地址
+# git remote remove origin
+
+# 添加新的远程仓库地址
+# git remote add origin 3Mker/DDPM.git
+
+# 推送本地代码到新的远程仓库
+# git push -u origin master
